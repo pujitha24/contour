@@ -187,7 +187,7 @@ const (
 	FilterChainFilterName     string = "envoy.filters.http.filter_chain"
 )
 
-var compressorContentTypes = []string{
+var compressorContentTypeStrings = []string{
 	// Default content-types https://github.com/envoyproxy/envoy/blob/e74999dbdb12aa4d6b7a5d62d51731ea86bf72be/source/extensions/filters/http/compressor/compressor_filter.cc#L35-L38
 	"text/html", "text/plain", "text/css", "application/javascript", "application/x-javascript",
 	"text/javascript", "text/x-javascript", "text/ecmascript", "text/js", "text/jscript",
@@ -197,6 +197,19 @@ var compressorContentTypes = []string{
 	"application/grpc-web", "application/grpc-web+proto", "application/grpc-web+json", "application/grpc-web+thrift",
 	"application/grpc-web-text", "application/grpc-web-text+proto", "application/grpc-web-text+thrift",
 }
+
+// compressorContentTypes holds the content type matchers for the compressor filter,
+// built from compressorContentTypeStrings.
+var compressorContentTypes = func() []*envoy_matcher_v3.StringMatcher {
+	matchers := make([]*envoy_matcher_v3.StringMatcher, 0, len(compressorContentTypeStrings))
+	for _, contentType := range compressorContentTypeStrings {
+		matchers = append(matchers, &envoy_matcher_v3.StringMatcher{
+			MatchPattern: &envoy_matcher_v3.StringMatcher_Exact{Exact: contentType},
+			IgnoreCase:   true,
+		})
+	}
+	return matchers
+}()
 
 type httpConnectionManagerBuilder struct {
 	routeConfigName               string
@@ -383,8 +396,7 @@ func compressorFilter(algorithm contour_v1alpha1.CompressionAlgorithm, chooseFir
 				ChooseFirst: chooseFirst,
 				ResponseDirectionConfig: &envoy_filter_http_compressor_v3.Compressor_ResponseDirectionConfig{
 					CommonConfig: &envoy_filter_http_compressor_v3.Compressor_CommonDirectionConfig{
-						//nolint:staticcheck
-						ContentType: compressorContentTypes,
+						ContentTypeMatcher: compressorContentTypes,
 					},
 					// Accept-Encoding is deliberately passed to the upstream so it can still compress
 					// responses itself, e.g. content types not listed above or pre-compressed files.
